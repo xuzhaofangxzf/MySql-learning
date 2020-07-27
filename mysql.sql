@@ -1517,4 +1517,87 @@ SELECT AVG(money) FROM user;
 -- +------------+
 
 -- 虽然 **READ COMMITTED** 让我们只能读取到其他事务已经提交的数据，但还是会出现问题，
--- 就是**在读取同一个表的数据时，可能会发生前后不一致的情况。**这被称为**不可重复读现象 ( READ COMMITTED ) 。
+-- 就是**在读取同一个表的数据时，可能会发生前后不一致的情况。这被称为不可重复读现象 (READ COMMITTED ) 。
+
+
+-- 幻读(Ver 8.0.21没有幻读现象)
+-- 将隔离级别设置为 REPEATABLE READ(可被重复读)
+SET GLOBAL TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+
+-- +--------------------------------+
+-- | @@global.transaction_isolation |
+-- +--------------------------------+
+-- | REPEATABLE-READ                |
+-- +--------------------------------+
+
+-- 测试 **REPEATABLE READ** ，假设在两个不同的连接上分别执行 `START TRANSACTION` :
+-- A --- 成都
+START TRANSACTION;
+INSERT into user VALUES(6, 'd', 1000);
+INSERT into user VALUES(7, 'e', 50);
+INSERT into user VALUES(8, 'f', 60);
+INSERT into user VALUES(9, 'f', 100);
+INSERT into user VALUES(10, 'fg', 80);
+INSERT into user VALUES(11, 'h', 80);
+INSERT into user VALUES(12, 'g', 80);
+INSERT into user VALUES(13, 'fff', 80);
+INSERT into user VALUES(13, 'ggf', 80);
+
+
+
+
+
+
+
+
+-- B --- 北京
+START TRANSACTION;
+
+-- A
+COMMIT;
+-- 在A提交之前, 假如B执行与A有冲突的动作, B会阻塞, 直到A执行COMMIT, B会报错,  Duplicate entry '13' for key 'user.PRIMARY'
+-- 但假如是与A不同的动作, 则不会阻塞, 执行成功,
+-- 且通过查询只能查询到自己当前事务未提交的数据, 对方未提交的数据是看不到的.
+-- B                            A
+-- +----+-----------+-------+   +----+-----------+-------+
+-- | id | name      | money |   | id | name      | money |
+-- +----+-----------+-------+   +----+-----------+-------+
+-- |  1 | a         |  1000 |   |  1 | a         |  1000 |
+-- |  2 | b         |  1000 |   |  2 | b         |  1000 |
+-- |  3 | 小明      |   200 |   |  3 | 小明      |   200 |
+-- |  4 | 淘宝店    |  1800 |   |  4 | 淘宝店    |  1800 |
+-- |  6 | d         |  1000 |   |  6 | d         |  1000 |
+-- |  7 | e         |    50 |   |  7 | e         |    50 |
+-- |  8 | f         |    60 |   |  8 | f         |    60 |
+-- |  9 | f         |   100 |   |  9 | f         |   100 |
+-- | 10 | fg        |    80 |   | 10 | fg        |    80 |
+-- | 12 | g         |    80 |   | 11 | h         |    80 |
+-- +----+-----------+-------+   +----+-----------+-------+
+
+
+-- 串行化
+-- 顾名思义，就是所有事务的**写入操作**全都是串行化的。什么意思？把隔离级别修改成 **SERIALIZABLE** :
+
+SET GLOBAL TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+SELECT @@GLOBAL.TRANSACTION_ISOLATION;
+-- +--------------------------------+
+-- | @@GLOBAL.TRANSACTION_ISOLATION |
+-- +--------------------------------+
+-- | SERIALIZABLE                   |
+-- +--------------------------------+
+-- 两个事务都在执行操作,
+
+--  A 开启事务
+START TRANSACTION;
+-- B 开启事务
+
+--  A 执行
+INSERT INTO user VALUES (15, '王小花', 1000);
+INSERT INTO user VALUES (17, '王小花', 1000);
+
+-- B 执行
+
+INSERT INTO user VALUES (16, '王小花', 1000);
+INSERT INTO user VALUES (18, '王小花', 1000);
+
+-- 当前版本在执行不同的操作时，不会发生阻塞现象，可能是内部做了优化。
