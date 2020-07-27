@@ -1154,3 +1154,367 @@ order by sdegree desc;
 -- | 104 | 3-105 |      85 |
 -- | 109 | 3-105 |      76 |
 -- +-----+-------+---------+
+
+-- 34. 查询Student表中不姓王的同学记录
+select * from Student where sname not like '王%';
+
+-- +-----+-----------+------+------------+--------+
+-- | sno | sname     | ssex | sbirthday  | sclass |
+-- +-----+-----------+------+------------+--------+
+-- | 101 | 曾华      | 男   | 1977-09-01 | 95033  |
+-- | 102 | 匡明      | 男   | 1975-10-02 | 95031  |
+-- | 104 | 李军      | 男   | 1976-02-20 | 95033  |
+-- | 106 | 陆军      | 男   | 1974-06-03 | 95031  |
+-- | 108 | 张全蛋    | 男   | 1975-02-10 | 95031  |
+-- | 109 | 赵铁柱    | 男   | 1974-06-03 | 95031  |
+-- | 110 | 张飞      | 男   | 1977-09-01 | 95038  |
+-- +-----+-----------+------+------------+--------+
+
+-- 35. 查询Student表中每个学生的姓名和年龄
+select year(now());
+-- +-------------+
+-- | year(now()) |
+-- +-------------+
+-- |        2020 |
+-- +-------------+
+select year(sbirthday) from Student;
+select sname, year(now()) - year(sbirthday) as Age from Student;
+
+-- 36. 查询Student表中最大和最小的是sbirthday日期值
+select sbirthday from Student;
+select max(sbirthday) as '最小年龄', min(sbirthday) as '最大年龄' from Student;
+
+-- 37, 以班号和年龄从大到小顺序查询Student表中的全部记录
+select * from Student order by sclass desc, sbirthday;
+
+-- 39. 查询最高分同学的sno,cno和sdegree列
+select max(sdegree) from Score;
+select sno, cno, sdegree from Score where sdegree = (select max(sdegree) from Score);
+
+
+-- 按等级查询
+
+-- 建立一个grade表代表学生的成绩等级,并插入数据:
+CREATE table grade(
+    low int,
+    up int,
+    grade char(1)
+);
+INSERT INTO grade VALUES (90, 100, 'A');
+INSERT INTO grade VALUES (80, 89, 'B');
+INSERT INTO grade VALUES (70, 79, 'C');
+INSERT INTO grade VALUES (60, 69, 'D');
+INSERT INTO grade VALUES (0, 59, 'E');
+
+-- 查询所有学生的sno,cno和grade列
+
+select sno, cno, sdegree, grade from Score, grade where sdegree between low and up;
+
+
+
+-- 事务
+-- ==============================================================================
+-- 在mysql中,事务是一个最小的不可分割的工作单元.事务能够保证一个业务的完整性,
+-- 比如,银行转账
+-- a -> -100
+update user set money = money - 100 where name = 'a';
+-- b -> +100
+update user set money = money + 100 where name = 'b';
+-- 在实际项目中,假设只有一条sql语句执行成功,而另一条失败了,就会出现数据前后的不一致
+-- 因此,在执行多条有关sql语句时,事务可能会要求这些sql语句要么同事执行成功,要么都执行失败.
+-- 如何控制事务-commit/rollback
+-- 在mysql中,事务的自动提交状态默认是开启的
+-- 查询事务自动提交状态
+select @@autocommit;
+
+-- +--------------+
+-- | @@autocommit |
+-- +--------------+
+-- |            1 |
+-- +--------------+
+
+-- 自动提交的作用: 当我们执行一条sql语句的时候, 其产生的效果会立即体现出来, 且不能回滚.
+-- 回滚例子:
+create database bank;
+use bank;
+create table user(
+    id int primary key,
+    name varchar(20),
+    money int
+);
+
+insert into user values(1, 'a', 1000);
+
+-- +----+------+-------+
+-- | id | name | money |
+-- +----+------+-------+
+-- |  1 | a    |  1000 |
+-- +----+------+-------+
+
+-- 可以看到，在执行插入语句后数据立刻生效，原因是 MySQL 中的事务自动将它**提交**到了数据库中。
+-- 那么所谓**回滚**的意思就是，撤销执行过的所有 SQL 语句，使其回滚到**最后一次提交**数据时的状态。
+-- 在mysql中使用rollback执行回滚
+
+-- 回滚到最后一次提交
+rollback;
+-- 由于所执行的sql语句已经被commit过了,所以数据并没有发生回滚.
+-- +----+------+-------+
+-- | id | name | money |
+-- +----+------+-------+
+-- |  1 | a    |  1000 |
+-- +----+------+-------+
+
+-- 如何让数据可以发生回滚? 关闭自动提交
+-- 关闭自动提交
+set autocommit = 0;
+-- 查询自动提交状态
+
+select @@autocommit;
+INSERT INTO user VALUES (2, 'b', 1000);
+select * from user;
+-- +----+------+-------+
+-- | id | name | money |
+-- +----+------+-------+
+-- |  1 | a    |  1000 |
+-- |  2 | b    |  1000 |
+-- +----+------+-------+
+
+-- 然后执行rollback之后又回到了原来的状态
+rollback;
+-- +----+------+-------+
+-- | id | name | money |
+-- +----+------+-------+
+-- |  1 | a    |  1000 |
+-- +----+------+-------+
+
+-- 如何将虚拟的数据真正的提交到数据库中? 使用commit:
+insert into user values(2, 'b', 1000);
+commit;
+-- 提交后回滚
+rollback;
+-- 再次查询(回滚无效)
+
+-- +----+------+-------+
+-- | id | name | money |
+-- +----+------+-------+
+-- |  1 | a    |  1000 |
+-- |  2 | b    |  1000 |
+-- +----+------+-------+
+-- 事务的实际应用
+
+-- 转账
+UPDATE user set money = money - 100 WHERE name = 'a';
+
+-- 到账
+UPDATE user set money = money + 100 WHERE name = 'b';
+
+-- mysql> select *from user;
+-- +----+------+-------+
+-- | id | name | money |
+-- +----+------+-------+
+-- |  1 | a    |   900 |
+-- |  2 | b    |  1100 |
+-- +----+------+-------+
+-- 2 rows in set (0.00 sec)
+
+-- mysql> rollback;
+-- Query OK, 0 rows affected (0.00 sec)
+
+-- mysql> select *from user;
+-- +----+------+-------+
+-- | id | name | money |
+-- +----+------+-------+
+-- |  1 | a    |  1000 |
+-- |  2 | b    |  1000 |
+-- +----+------+-------+
+
+-- 手动开启事务: begin/start transaction
+-- 事务的默认提交被开启 ( `@@AUTOCOMMIT = 1` ) 后，此时就不能使用事务回滚了。但是我们还可以手动开启一个事务处理事件，使其可以发生回滚：
+
+-- 使用 BEGIN 或者 START TRANSACTION 手动开启一个事务
+-- START TRANSACTION;
+start transaction;
+UPDATE user set money = money - 100 WHERE name = 'a';
+UPDATE user set money = money + 100 WHERE name = 'b';
+-- 由于手动开启的事务没有开启自动提交，
+-- 此时发生变化的数据仍然是被保存在一张临时表中。
+-- 测试回滚
+rollback;
+-- +----+------+-------+
+-- | id | name | money |
+-- +----+------+-------+
+-- |  1 | a    |  1000 |
+-- |  2 | b    |  1000 |
+-- +----+------+-------+
+-- 仍然使用commit提交数据,提交后无法再次发生本次事务的回滚
+
+start transaction;
+UPDATE user set money = money - 100 WHERE name = 'a';
+UPDATE user set money = money + 100 WHERE name = 'b';
+commit;
+-- 测试无法回滚
+
+-- 事务的ACID特征与使用
+-- 事务的四大特性:
+-- 1: A 原子性: 事务是最小的单位,不可以再分割
+-- 2. B 一致性: 要求同一事务中的sql语句,必须保证同时成功或者失败
+-- 3. I 隔离性: 事务1和事务2之间是具有隔离性的.
+-- 4. D 持久性: 事务一旦结束(commit), 就不可以再返回了(rollback)
+
+
+-- 事务的隔离性:
+-- 事务的隔离性可分为四中(性能从高到低):
+-- 1. read uncommitted(读取未提交)
+--  如果有多个事务, 那么任意事务都可以看见其他事务的未提交数据.
+-- 2. read committed(读取已提交)
+-- 只能读取到其他事务**已经提交的数据
+-- 3. repeatable read(可被重复读)
+-- 如果有多个连接都开启了事务，那么事务之间不能共享数据记录，否则只能共享已提交的记录
+-- 4. serializable(串行化)
+-- 所有的事务都会按照固定的顺序执行，执行完毕一个事务后再继续执行下一个事务的写入操作。
+
+-- 查看当前数据库默认的隔离级别
+-- GLOBAL 表示系统级别，不加表示会话级别。
+select @@global.transaction_isolation;
+select @@transaction_isolation;
+-- +--------------------------------+
+-- | @@global.transaction_isolation |
+-- +--------------------------------+
+-- | REPEATABLE-READ                |
+-- +--------------------------------+
+-- 修改系统隔离级别(大写有效)
+SET GLOBAL TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; 
+select @@global.TRANSACTION_ISOLATION;
+
+
+-- 脏读
+
+INSERT INTO user VALUES (3, '小明', 1000);
+INSERT INTO user VALUES (4, '淘宝店', 1000);
+
+-- +----+-----------+-------+
+-- | id | name      | money |
+-- +----+-----------+-------+
+-- |  1 | a         |  1000 |
+-- |  2 | b         |  1000 |
+-- |  3 | 小明      |  1000 |
+-- |  4 | 淘宝店    |  1000 |
+-- +----+-----------+-------+
+
+-- 开启一个事务操作数据
+-- 假设小明在淘宝店买了一双800块钱的鞋子：
+start TRANSACTION;
+UPDATE user SET money = money - 800 WHERE name = '小明';
+UPDATE user SET money = money + 800 WHERE name = '淘宝店';
+
+-- 在小明未执行commit之前，在淘宝的另一方查询结果，发现钱已经到账
+select * from user;
+-- +----+-----------+-------+
+-- | id | name      | money |
+-- +----+-----------+-------+
+-- |  1 | a         |  1000 |
+-- |  2 | b         |  1000 |
+-- |  3 | 小明      |   200 |
+-- |  4 | 淘宝店    |  1800 |
+-- +----+-----------+-------+
+
+-- 由于小明的转账是在新开启的事务上进行操作的，而该操作的结果是可以被其他事务（另一方的淘宝店）看见的，
+-- 因此淘宝店的查询结果是正确的，淘宝店确认到账。但就在这时，如果小明在它所处的事务上又执行了 `ROLLBACK` 命令，会发生什么？
+
+-- 小明所处的事务执行：
+rollback;
+-- 此时无论是淘宝还是小明，查询的结果都恢复到了原来。
+
+-- +----+-----------+-------+
+-- | id | name      | money |
+-- +----+-----------+-------+
+-- |  1 | a         |  1000 |
+-- |  2 | b         |  1000 |
+-- |  3 | 小明      |  1000 |
+-- |  4 | 淘宝店    |  1000 |
+-- +----+-----------+-------+
+-- 此种现象就被称为脏读，一个事务读取到了另外一个事务还未提交的数据。这在实际开发中是不允许出现的。
+
+-- 读取已经提交的.
+-- 把隔离级别设置为read committed;
+SET GLOBAL TRANSACTION ISOLATION LEVEL READ COMMITTED;
+
+
+-- mysql> select @@global.TRANSACTION_ISOLATION;
+-- +--------------------------------+
+-- | @@global.TRANSACTION_ISOLATION |
+-- +--------------------------------+
+-- | READ-COMMITTED                 |
+-- +--------------------------------+
+
+
+-- 这样，再有新的事务连接进来时，它们就只能查询到已经提交过的事务数据了。
+-- 但是对于当前事务来说，它们看到的还是未提交的数据，例如：
+--  正在操作数据事务（当前事务）
+start TRANSACTION;
+UPDATE user SET money = money - 800 WHERE name = '小明';
+UPDATE user SET money = money + 800 WHERE name = '淘宝店';
+-- 虽然隔离级别被设置了READ COMMITTED,但在当前事务中,它看到的仍然是数据表中历史改变的数据,而不是真正提交过的数据
+-- mysql> select * from user;
+-- +----+-----------+-------+
+-- | id | name      | money |
+-- +----+-----------+-------+
+-- |  1 | a         |  1000 |
+-- |  2 | b         |  1000 |
+-- |  3 | 小明      |   200 |
+-- |  4 | 淘宝店    |  1800 |
+-- +----+-----------+-------+
+
+-- 假设此时在远程开启了一个新事务，连接到数据库。
+
+-- 此时远程连接查询到的数据只能是已经提交过的
+-- mysql> select * from user;
+-- +----+-----------+-------+
+-- | id | name      | money |
+-- +----+-----------+-------+
+-- |  1 | a         |  1000 |
+-- |  2 | b         |  1000 |
+-- |  3 | 小明      |  1000 |
+-- |  4 | 淘宝店    |  1000 |
+-- +----+-----------+-------+
+
+-- 但是这样还有问题，那就是假设一个事务在操作数据时，其他事务干扰了这个事务的数据。例如：
+
+-- 小张在查询数据的时候发现：
+SELECT * FROM user;
+-- +----+-----------+-------+
+-- | id | name      | money |
+-- +----+-----------+-------+
+-- |  1 | a         |   900 |
+-- |  2 | b         |  1100 |
+-- |  3 | 小明      |   200 |
+-- |  4 | 淘宝店    |  1800 |
+-- +----+-----------+-------+
+
+-- 在小张求表的 money 平均值之前，小王做了一个操作：
+START TRANSACTION;
+INSERT INTO user VALUES (5, 'c', 100);
+COMMIT;
+
+-- 此时表的真实数据是：
+SELECT * FROM user;
+-- +----+-----------+-------+
+-- | id | name      | money |
+-- +----+-----------+-------+
+-- |  1 | a         |   900 |
+-- |  2 | b         |  1100 |
+-- |  3 | 小明      |  1000 |
+-- |  4 | 淘宝店    |  1000 |
+-- |  5 | c         |   100 |
+-- +----+-----------+-------+
+
+-- 这时小张再求平均值的时候，就会出现计算不相符合的情况：
+SELECT AVG(money) FROM user;
+-- +------------+
+-- | AVG(money) |
+-- +------------+
+-- |  820.0000  |
+-- +------------+
+
+-- 虽然 **READ COMMITTED** 让我们只能读取到其他事务已经提交的数据，但还是会出现问题，
+-- 就是**在读取同一个表的数据时，可能会发生前后不一致的情况。**这被称为**不可重复读现象 ( READ COMMITTED ) 。
