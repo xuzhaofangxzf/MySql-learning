@@ -1601,3 +1601,115 @@ INSERT INTO user VALUES (16, '王小花', 1000);
 INSERT INTO user VALUES (18, '王小花', 1000);
 
 -- 当前版本在执行不同的操作时，不会发生阻塞现象，可能是内部做了优化。
+
+
+-- 连接查询
+-- 准备数据
+create DATABASE testjoin;
+
+CREATE TABLE person (
+    id INT,
+    name VARCHAR(20),
+    cardId INT
+);
+
+CREATE TABLE card (
+    id INT,
+    name VARCHAR(20)
+);
+
+INSERT INTO person VALUES (1, '张三', 1), (2, '李四', 3), (3, '王五', 6);
+
+INSERT INTO card VALUES (1, '饭卡'), (2, '建行卡'), (3, '农行卡'), (4, '工商卡'), (5, '邮政卡');
+
+
+SELECT * FROM card;
+-- +------+-----------+
+-- | id   | name      |
+-- +------+-----------+
+-- |    1 | 饭卡      |
+-- |    2 | 建行卡    |
+-- |    3 | 农行卡    |
+-- |    4 | 工商卡    |
+-- |    5 | 邮政卡    |
+-- +------+-----------+
+select * from person
+-- +------+--------+--------+
+-- | id   | name   | cardId |
+-- +------+--------+--------+
+-- |    1 | 张三   |      1 |
+-- |    2 | 李四   |      3 |
+-- |    3 | 王五   |      6 |
+-- +------+--------+--------+
+-- `person` 表并没有为 `cardId` 字段设置一个在 `card` 表中对应的 `id` 外键。
+-- 如果设置了的话，`person` 中 `cardId` 字段值为 `6` 的行就插不进去，因为该 `cardId` 值在 `card` 表中并没有
+
+-- 内连接
+-- 要查询这两张表中有关系的数据，可以使用 `INNER JOIN` ( 内连接 ) 将它们连接在一起
+
+-- INNER JOIN: 表示为内连接，将两张表拼接在一起。
+-- on: 表示要执行某个条件。
+select * from person inner join card on person.cardid = card.id;
+
+-- +------+--------+--------+------+-----------+
+-- | id   | name   | cardId | id   | name      |
+-- +------+--------+--------+------+-----------+
+-- |    1 | 张三   |      1 |    1 | 饭卡      |
+-- |    2 | 李四   |      3 |    3 | 农行卡    |
+-- +------+--------+--------+------+-----------+
+
+-- 左外连接
+-- +------+--------+--------+------+-----------+
+-- | id   | name   | cardId | id   | name      |
+-- +------+--------+--------+------+-----------+
+-- |    1 | 张三   |      1 |    1 | 饭卡      |
+-- |    2 | 李四   |      3 |    3 | 农行卡    |
+-- +------+--------+--------+------+-----------+
+-- LEFT JOIN 也叫做 LEFT OUTER JOIN，用这两种方式的查询结果是一样的。
+select * from person left join card on person.cardid = card.id;
+
+-- +------+--------+--------+------+-----------+
+-- | id   | name   | cardId | id   | name      |
+-- +------+--------+--------+------+-----------+
+-- |    1 | 张三   |      1 |    1 | 饭卡      |
+-- |    2 | 李四   |      3 |    3 | 农行卡    |
+-- |    3 | 王五   |      6 | NULL | NULL      |
+-- +------+--------+--------+------+-----------+
+
+
+-- 右外链接
+-- 完整显示右边的表 ( `card` ) ，左边的表如果符合条件就显示，不符合则补 `NULL`
+select * from person RIGHT JOIN card on person.cardid = card.id;
+
+-- +------+--------+--------+------+-----------+
+-- | id   | name   | cardId | id   | name      |
+-- +------+--------+--------+------+-----------+
+-- |    1 | 张三   |      1 |    1 | 饭卡      |
+-- | NULL | NULL   |   NULL |    2 | 建行卡    |
+-- |    2 | 李四   |      3 |    3 | 农行卡    |
+-- | NULL | NULL   |   NULL |    4 | 工商卡    |
+-- | NULL | NULL   |   NULL |    5 | 邮政卡    |
+-- +------+--------+--------+------+-----------+
+
+-- 全外连接
+-- 完整显示两张的全部数据
+-- MySQL 不支持这种语法的全外连接
+-- SELECT * FROM person FULL JOIN card on person.cardId = card.id;
+-- 出现错误：
+-- ERROR 1054 (42S22): Unknown column 'person.cardId' in 'on clause'
+-- MySQL全连接语法，使用 UNION 将两张表合并在一起。
+
+SELECT * FROM person LEFT JOIN card on person.cardId = card.id
+UNION
+SELECT * FROM person RIGHT JOIN card on person.cardId = card.id;
+
+-- +------+--------+--------+------+-----------+
+-- | id   | name   | cardId | id   | name      |
+-- +------+--------+--------+------+-----------+
+-- |    1 | 张三   |      1 |    1 | 饭卡      |
+-- |    2 | 李四   |      3 |    3 | 农行卡    |
+-- |    3 | 王五   |      6 | NULL | NULL      |
+-- | NULL | NULL   |   NULL |    2 | 建行卡    |
+-- | NULL | NULL   |   NULL |    4 | 工商卡    |
+-- | NULL | NULL   |   NULL |    5 | 邮政卡    |
+-- +------+--------+--------+------+-----------+
